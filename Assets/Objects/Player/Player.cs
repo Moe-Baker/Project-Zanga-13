@@ -1,9 +1,11 @@
+using KinematicCharacterController;
+
 using System;
 
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class Player : MonoBehaviour
+public class Player : MonoBehaviour, ICharacterController
 {
     [SerializeField]
     PlayerType Type;
@@ -14,7 +16,7 @@ public class Player : MonoBehaviour
     [SerializeField]
     InputActionAsset InputAsset;
 
-    protected CharacterController CharacterController;
+    KinematicCharacterMotor CharacterMotor;
 
     TimeStream TimeStream;
 
@@ -24,7 +26,8 @@ public class Player : MonoBehaviour
     {
         InputAsset.Enable();
 
-        CharacterController = GetComponent<CharacterController>();
+        CharacterMotor = GetComponent<KinematicCharacterMotor>();
+        CharacterMotor.CharacterController = this;
 
         MoveAction = InputAsset["Player/Move"];
         SwapTimeAction = InputAsset["Player/Swap Time"];
@@ -69,9 +72,9 @@ public class Player : MonoBehaviour
     {
         CalculateGravity();
 
-        ApplyMovement();
+        CalculateMovement();
 
-        ApplyLook();
+        CalculateLook();
 
         ProcessTimeSwapAction();
     }
@@ -86,6 +89,8 @@ public class Player : MonoBehaviour
     }
 
     #region Gravity
+    [Header("Gravity")]
+
     [SerializeField]
     float GravityTerminalVelocity = 20f;
     [SerializeField]
@@ -95,7 +100,7 @@ public class Player : MonoBehaviour
 
     void CalculateGravity()
     {
-        if (CharacterController.isGrounded)
+        if (CharacterMotor.GroundingStatus.IsStableOnGround)
         {
             GravityVelocity = 0f;
         }
@@ -107,6 +112,8 @@ public class Player : MonoBehaviour
     #endregion
 
     #region Move
+    [Header("Move")]
+
     [SerializeField]
     float MoveSpeed = 5;
     [SerializeField]
@@ -114,34 +121,51 @@ public class Player : MonoBehaviour
 
     InputAction MoveAction;
 
-    void ApplyMovement()
+    Vector3 HorizontalVelocity;
+    Vector3 VerticalVelocity;
+
+    void CalculateMovement()
     {
-        var input = MoveAction.ReadValue<Vector2>();
+        //Calculate Horizontal
+        {
+            var input = MoveAction.ReadValue<Vector2>();
 
-        var velocity = (Vector3.right * input.x) + (Vector3.forward * input.y);
-        velocity = Vector3.ClampMagnitude(velocity * MoveSpeed, MoveSpeed);
+            var direction = (Vector3.right * input.x) + (Vector3.forward * input.y);
+            direction = Vector3.ClampMagnitude(direction * MoveSpeed, MoveSpeed);
 
-        velocity += Vector3.down * GravityVelocity;
+            HorizontalVelocity = Vector3.MoveTowards(HorizontalVelocity, direction, MoveAcceleration * Time.deltaTime);
+        }
 
-        CharacterController.Move(velocity * Time.deltaTime);
+        //Calculate Vertical Velocity
+        {
+            VerticalVelocity = Vector3.down * GravityVelocity;
+        }
+    }
+
+    public void UpdateVelocity(ref Vector3 current, float deltaTime)
+    {
+        current = HorizontalVelocity + VerticalVelocity;
     }
     #endregion
 
     #region Look
+    [Header("Look")]
+
     [SerializeField]
     float LookSpeed = 360f;
 
-    void ApplyLook()
+    void CalculateLook() { }
+
+    public void UpdateRotation(ref Quaternion current, float deltaTime)
     {
-        var velocity = CharacterController.velocity;
+        var velocity = CharacterMotor.BaseVelocity;
         velocity.y = 0f;
 
-        if (velocity.magnitude < 0.5f)
+        if (velocity.magnitude < 0.25f)
             return;
 
-        var rotation = Quaternion.LookRotation(velocity);
-
-        transform.rotation = Quaternion.RotateTowards(transform.rotation, rotation, LookSpeed * Time.deltaTime);
+        var target = Quaternion.LookRotation(velocity);
+        current = Quaternion.RotateTowards(current, target, LookSpeed * deltaTime);
     }
     #endregion
 
@@ -157,7 +181,6 @@ public class Player : MonoBehaviour
     }
     #endregion
 
-
     TimePeriod PlayerTypeToTimePeriod(PlayerType type) => type switch
     {
         PlayerType.Big => TimePeriod.Past,
@@ -165,6 +188,22 @@ public class Player : MonoBehaviour
 
         _ => throw new NotImplementedException(),
     };
+
+    #region Kinematic Character Controller Usages
+    public void BeforeCharacterUpdate(float deltaTime) { }
+
+    public void PostGroundingUpdate(float deltaTime) { }
+
+    public void AfterCharacterUpdate(float deltaTime) { }
+
+    public bool IsColliderValidForCollisions(Collider coll) => true;
+
+    public void OnGroundHit(Collider hitCollider, Vector3 hitNormal, Vector3 hitPoint, ref HitStabilityReport hitStabilityReport) { }
+
+    public void OnMovementHit(Collider hitCollider, Vector3 hitNormal, Vector3 hitPoint, ref HitStabilityReport hitStabilityReport) { }
+    public void ProcessHitStabilityReport(Collider hitCollider, Vector3 hitNormal, Vector3 hitPoint, Vector3 atCharacterPosition, Quaternion atCharacterRotation, ref HitStabilityReport hitStabilityReport) { }
+    public void OnDiscreteCollisionDetected(Collider hitCollider) { }
+    #endregion
 }
 
 public enum PlayerType
