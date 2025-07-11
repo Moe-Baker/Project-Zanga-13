@@ -2,14 +2,16 @@ using UnityEngine;
 
 public class CameraRig : MonoBehaviour
 {
-    BasePlayer Target;
-    public void SetTarget(BasePlayer value)
+    Player Target;
+    public void SetTarget(Player value)
     {
         Target = value;
 
-        transform.parent = null;
+        transform.parent = Target.transform.parent;
         transform.rotation = Quaternion.identity;
     }
+
+    public void SetActive(bool value) => gameObject.SetActive(value);
 
     void LateUpdate()
     {

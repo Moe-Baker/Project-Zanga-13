@@ -3,37 +3,58 @@ using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class BasePlayer : MonoBehaviour
+public class Player : MonoBehaviour
 {
+    [SerializeField]
+    PlayerType Type;
+
     [SerializeField]
     CameraRig CameraRig;
 
     [SerializeField]
     InputActionAsset InputAsset;
 
-    InputAction JumpAction;
-    InputAction GrabAction;
-
     protected CharacterController CharacterController;
+
+    TimeStream TimeStream;
+
+    Level Level => Level.Instance;
 
     void Awake()
     {
+        InputAsset.Enable();
+
         CharacterController = GetComponent<CharacterController>();
 
         MoveAction = InputAsset["Player/Move"];
-        JumpAction = InputAsset["Player/Jump"];
-        GrabAction = InputAsset["Player/Grab"];
+        SwapTimeAction = InputAsset["Player/Swap Time"];
 
         CameraRig.SetTarget(this);
+    }
+    void Start()
+    {
+        //Hook Time System
+        {
+            var period = PlayerTypeToTimePeriod(Type);
+            TimeStream = Level.TimeSystem.Streams.Evaluate(period);
+
+            TimeStream.OnEnter += TimeStreamEnterCallback;
+            TimeStream.OnExit += TimeStreamExitCallback;
+
+            if (TimeStream.InUse)
+                TimeStreamEnterCallback();
+            else
+                TimeStreamExitCallback();
+        }
     }
 
     void OnEnable()
     {
-        InputAsset.Enable();
+        CameraRig.SetActive(true);
     }
     void OnDisable()
     {
-        InputAsset.Disable();
+        if (CameraRig) CameraRig.SetActive(false);
     }
 
     void Update()
@@ -43,6 +64,17 @@ public class BasePlayer : MonoBehaviour
         ApplyMovement();
 
         ApplyLook();
+
+        ProcessTimeSwapAction();
+    }
+
+    void TimeStreamEnterCallback()
+    {
+        gameObject.SetActive(true);
+    }
+    void TimeStreamExitCallback()
+    {
+        gameObject.SetActive(false);
     }
 
     #region Gravity
@@ -104,4 +136,30 @@ public class BasePlayer : MonoBehaviour
         transform.rotation = Quaternion.RotateTowards(transform.rotation, rotation, LookSpeed * Time.deltaTime);
     }
     #endregion
+
+    #region Time Swap
+    InputAction SwapTimeAction;
+
+    void ProcessTimeSwapAction()
+    {
+        if (SwapTimeAction.WasPressedThisFrame() is false)
+            return;
+
+        Level.TimeSystem.TogglePeriod();
+    }
+    #endregion
+
+
+    TimePeriod PlayerTypeToTimePeriod(PlayerType type) => type switch
+    {
+        PlayerType.Big => TimePeriod.Past,
+        PlayerType.Small => TimePeriod.Future,
+
+        _ => throw new NotImplementedException(),
+    };
+}
+
+public enum PlayerType
+{
+    Small, Big
 }
