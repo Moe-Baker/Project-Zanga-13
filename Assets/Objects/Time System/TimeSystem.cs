@@ -5,7 +5,7 @@ using UnityEngine;
 public class TimeSystem : MonoBehaviour
 {
     [field: SerializeField]
-    public TimeSplitData<TimeStream> Streams { get; private set; }
+    public TimePeriodData<TimeStream> Streams { get; private set; }
 
     public TimeStream Current { get; private set; }
 
@@ -19,9 +19,13 @@ public class TimeSystem : MonoBehaviour
     }
     public event Action<TimePeriod> OnChangePeriod;
 
-    void Start()
+    void Awake()
     {
         ChangePeriod(TimePeriod.Past);
+    }
+    void Start()
+    {
+
     }
 
     public void TogglePeriod()
@@ -46,7 +50,7 @@ public enum TimePeriod
 }
 
 [Serializable]
-public struct TimeSplitData<TData>
+public struct TimePeriodData<TData>
 {
     [field: SerializeField]
     public TData Past { get; private set; }
@@ -68,7 +72,13 @@ public struct TimeSplitData<TData>
         action(Future);
     }
 
-    public TimeSplitData(TData Past, TData Future)
+    public void ForAll(Action<TimePeriod, TData> action)
+    {
+        action(TimePeriod.Past, Past);
+        action(TimePeriod.Future, Future);
+    }
+
+    public TimePeriodData(TData Past, TData Future)
     {
         this.Past = Past;
         this.Future = Future;

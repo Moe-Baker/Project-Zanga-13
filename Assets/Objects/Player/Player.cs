@@ -47,6 +47,14 @@ public class Player : MonoBehaviour
                 TimeStreamExitCallback();
         }
     }
+    void OnDestroy()
+    {
+        if (TimeStream)
+        {
+            TimeStream.OnEnter -= TimeStreamEnterCallback;
+            TimeStream.OnExit -= TimeStreamExitCallback;
+        }
+    }
 
     void OnEnable()
     {

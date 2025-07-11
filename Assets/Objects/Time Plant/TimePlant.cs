@@ -16,6 +16,10 @@ public class TimePlant : MonoBehaviour
         TimeSystem.OnChangePeriod += TimePeriodChangeCallback;
         TimePeriodChangeCallback(TimeSystem.Current.Period);
     }
+    void OnDestroy()
+    {
+        TimeSystem.OnChangePeriod -= TimePeriodChangeCallback;
+    }
 
     void TimePeriodChangeCallback(TimePeriod period)
     {
