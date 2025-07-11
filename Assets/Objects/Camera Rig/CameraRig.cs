@@ -17,7 +17,7 @@ public class CameraRig : MonoBehaviour
     {
         var destination = Target.transform.position;
 
-        destination.z = 0f;
+        //destination.z = 0f;
 
         transform.position = destination;
     }

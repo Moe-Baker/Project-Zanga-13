@@ -14,6 +14,9 @@ public class Player : MonoBehaviour, ICharacterController
     CameraRig CameraRig;
 
     [SerializeField]
+    Animator Animator;
+
+    [SerializeField]
     InputActionAsset InputAsset;
 
     KinematicCharacterMotor CharacterMotor;
@@ -140,6 +143,17 @@ public class Player : MonoBehaviour, ICharacterController
         {
             VerticalVelocity = Vector3.down * GravityVelocity;
         }
+
+        ApplyMovementAnimation();
+    }
+
+    void ApplyMovementAnimation()
+    {
+        var speed = transform.InverseTransformDirection(CharacterMotor.BaseVelocity) / MoveSpeed;
+
+        var move = Mathf.Abs(speed.z);
+
+        Animator.SetFloat("Move", move);
     }
 
     public void UpdateVelocity(ref Vector3 current, float deltaTime)
