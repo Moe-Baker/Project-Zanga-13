@@ -24,22 +24,17 @@ public class TimePlant : MonoBehaviour
     void TimePeriodChangeCallback(TimePeriod period)
     {
         Seed.gameObject.SetActive(period is TimePeriod.Past);
-        Tree.gameObject.SetActive(period is TimePeriod.Future);
 
-        switch (period)
+        if (period is TimePeriod.Future && Seed.CanGrow())
         {
-            case TimePeriod.Past:
-            {
+            Tree.gameObject.SetActive(true);
 
-            }
-            break;
-
-            case TimePeriod.Future:
-            {
-                var position = Seed.GetTreeGrowthPosition();
-                Tree.Grow(position);
-            }
-            break;
+            var position = Seed.GetTreeGrowthPosition();
+            Tree.Grow(position);
+        }
+        else
+        {
+            Tree.gameObject.SetActive(false);
         }
     }
 }

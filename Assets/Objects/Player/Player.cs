@@ -1,9 +1,15 @@
 using KinematicCharacterController;
 
+using NUnit.Framework.Constraints;
+
 using System;
+
+using TMPro;
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+
+using static UnityEngine.GraphicsBuffer;
 
 public class Player : MonoBehaviour, ICharacterController
 {
@@ -20,6 +26,7 @@ public class Player : MonoBehaviour, ICharacterController
     InputActionAsset InputAsset;
 
     KinematicCharacterMotor CharacterMotor;
+    CapsuleCollider Collider;
 
     TimeStream TimeStream;
 
@@ -32,8 +39,11 @@ public class Player : MonoBehaviour, ICharacterController
         CharacterMotor = GetComponent<KinematicCharacterMotor>();
         CharacterMotor.CharacterController = this;
 
+        Collider = GetComponent<CapsuleCollider>();
+
         MoveAction = InputAsset["Player/Move"];
         SwapTimeAction = InputAsset["Player/Swap Time"];
+        InteractAction = InputAsset["Player/Interact"];
 
         CameraRig.SetTarget(this);
     }
@@ -80,6 +90,8 @@ public class Player : MonoBehaviour, ICharacterController
         CalculateLook();
 
         ProcessTimeSwapAction();
+
+        ProcessInteraction();
     }
 
     void TimeStreamEnterCallback()
@@ -192,6 +204,140 @@ public class Player : MonoBehaviour, ICharacterController
             return;
 
         Level.TimeSystem.TogglePeriod();
+    }
+    #endregion
+
+    #region Interact
+    [Header("Interact")]
+
+    [SerializeField]
+    float InteractionRadius = 5f;
+
+    InputAction InteractAction;
+
+    void ProcessInteraction()
+    {
+        if (IsGrabbing)
+        {
+            ProcessGrab();
+            return;
+        }
+
+        if (CanInteract())
+        {
+            var hits = CheckInteractOverlap();
+
+            if (TryFindInteractable(hits, out var item))
+            {
+                Level.InteractionIndicator.Activate(item);
+
+                if (InteractAction.WasPressedThisFrame())
+                    PerformInteract(item);
+            }
+            else
+            {
+                Level.InteractionIndicator.Disable();
+            }
+        }
+        else
+        {
+            Level.InteractionIndicator.Disable();
+        }
+    }
+
+    Collider[] InteractCache = new Collider[10];
+    ArraySegment<Collider> CheckInteractOverlap()
+    {
+        var top = CharacterMotor.transform.position + CharacterMotor.CharacterTransformToCapsuleTop;
+        var bottom = CharacterMotor.transform.position + CharacterMotor.CharacterTransformToCapsuleBottom;
+
+        var count = Physics.OverlapCapsuleNonAlloc(top, bottom, InteractionRadius, InteractCache, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+        return new ArraySegment<Collider>(InteractCache, 0, count);
+    }
+    bool TryFindInteractable(ArraySegment<Collider> colliders, out InteractionItem item)
+    {
+        var marker = (Item: default(InteractionItem), Score: float.MinValue);
+
+        foreach (var collider in colliders)
+        {
+            var root = collider.GetRoot();
+
+            if (root.TryGetComponent(out InteractionItem context) is false)
+                continue;
+
+            var score = CalculateScore(context);
+
+            if (score > marker.Score)
+                marker = (context, score);
+        }
+
+        item = marker.Item;
+        return item != null;
+
+        float CalculateScore(InteractionItem item)
+        {
+            var distance = Vector3.Distance(transform.position, item.transform.position);
+            var angle = Vector3.Angle(transform.forward, (item.transform.position - transform.position));
+
+            return (-distance) + (-angle);
+        }
+    }
+
+    bool CanInteract()
+    {
+        if (IsGrabbing) return false;
+
+        return true;
+    }
+
+    void PerformInteract(InteractionItem item)
+    {
+        Level.InteractionIndicator.Disable();
+
+        item.Interact(this);
+
+        if (item is GrabItem grabbable)
+            Grab(grabbable);
+    }
+    #endregion
+
+    #region Grab
+    [Header("Grab")]
+
+    [SerializeField]
+    Transform GrabHeightMarker;
+
+    [SerializeField]
+    float GrabSpacing;
+
+    GrabItem GrabItem;
+    public bool IsGrabbing => GrabItem != null;
+
+    void ProcessGrab()
+    {
+        if (InteractAction.WasPressedThisFrame())
+        {
+            Drop();
+        }
+    }
+
+    void Grab(GrabItem target)
+    {
+        GrabItem = target;
+
+        GrabItem.transform.parent = GrabHeightMarker.transform;
+        GrabItem.transform.localPosition = Vector3.forward * (GrabItem.Radius + GrabSpacing);
+        GrabItem.transform.rotation = Quaternion.identity;
+
+        GrabItem.Pickup(this);
+    }
+    void Drop()
+    {
+        GrabItem.transform.parent = null;
+
+        var cache = GrabItem;
+        GrabItem = default;
+        cache.Drop();
     }
     #endregion
 
