@@ -26,6 +26,8 @@ public class Player : MonoBehaviour, ICharacterController
     InputActionAsset InputAsset;
 
     KinematicCharacterMotor CharacterMotor;
+    bool IsGrounded => CharacterMotor.GroundingStatus.IsStableOnGround;
+
     CapsuleCollider Collider;
 
     TimeStream TimeStream;
@@ -44,6 +46,7 @@ public class Player : MonoBehaviour, ICharacterController
         MoveAction = InputAsset["Player/Move"];
         SwapTimeAction = InputAsset["Player/Swap Time"];
         InteractAction = InputAsset["Player/Interact"];
+        JumpAction = InputAsset["Player/Jump"];
 
         CameraRig.SetTarget(this);
     }
@@ -84,7 +87,7 @@ public class Player : MonoBehaviour, ICharacterController
     void Update()
     {
         CalculateGravity();
-
+        ProcessJump();
         CalculateMovement();
 
         CalculateLook();
@@ -115,7 +118,7 @@ public class Player : MonoBehaviour, ICharacterController
 
     void CalculateGravity()
     {
-        if (CharacterMotor.GroundingStatus.IsStableOnGround)
+        if (IsGrounded || JumpActive)
         {
             GravityVelocity = 0f;
         }
@@ -131,8 +134,11 @@ public class Player : MonoBehaviour, ICharacterController
 
     [SerializeField]
     float MoveSpeed = 5;
+
     [SerializeField]
     float MoveAcceleration = 20;
+    [SerializeField, Range(0f, 1f)]
+    float MoveAccelerationAirModifier = 0.2f;
 
     InputAction MoveAction;
 
@@ -148,12 +154,17 @@ public class Player : MonoBehaviour, ICharacterController
             var direction = (Vector3.right * input.x) + (Vector3.forward * input.y);
             direction = Vector3.ClampMagnitude(direction * MoveSpeed, MoveSpeed);
 
-            HorizontalVelocity = Vector3.MoveTowards(HorizontalVelocity, direction, MoveAcceleration * Time.deltaTime);
+            var acceleration = MoveAcceleration;
+
+            if (IsGrounded is false)
+                acceleration *= MoveAccelerationAirModifier;
+
+            HorizontalVelocity = Vector3.MoveTowards(HorizontalVelocity, direction, acceleration * Time.deltaTime);
         }
 
         //Calculate Vertical Velocity
         {
-            VerticalVelocity = Vector3.down * GravityVelocity;
+            VerticalVelocity = (Vector3.down * GravityVelocity) + (Vector3.up * JumpVelocity);
         }
 
         ApplyMovementAnimation();
@@ -171,6 +182,96 @@ public class Player : MonoBehaviour, ICharacterController
     public void UpdateVelocity(ref Vector3 current, float deltaTime)
     {
         current = HorizontalVelocity + VerticalVelocity;
+    }
+    #endregion
+
+    #region Jump
+    [Header("Jump")]
+
+    [SerializeField]
+    float JumpMaxForce;
+
+    [SerializeField]
+    float JumpDrag;
+
+    [SerializeField]
+    float JumpCoyoteTimeDuration = 0.15f;
+
+    float JumpCoyoteTimeTimer;
+
+    [SerializeField]
+    float JumpInputBufferDuration = 0.2f;
+    float JumpInputBufferTimer;
+
+    InputAction JumpAction;
+    bool JumpActive;
+    float JumpVelocity;
+
+    void ProcessJump()
+    {
+        //Coyote Time
+        {
+            if (IsGrounded)
+                JumpCoyoteTimeTimer = JumpCoyoteTimeDuration;
+            else
+                JumpCoyoteTimeTimer -= Time.deltaTime;
+        }
+
+        //Input Buffer
+        {
+            if (JumpAction.WasPressedThisFrame())
+                JumpInputBufferTimer = JumpInputBufferDuration;
+            else
+                JumpInputBufferTimer -= Time.deltaTime;
+        }
+
+        if (JumpActive)
+        {
+            JumpVelocity = Mathf.MoveTowards(JumpVelocity, 0f, JumpDrag * Time.deltaTime);
+
+            if (Mathf.Approximately(JumpVelocity, 0f))
+            {
+                JumpActive = false;
+                JumpVelocity = 0f;
+            }
+        }
+        else if (HasJumpInput() && CanJump())
+        {
+            JumpActive = true;
+            JumpVelocity = JumpMaxForce;
+
+            JumpCoyoteTimeTimer = 0;
+            JumpInputBufferTimer = 0;
+
+            CharacterMotor.ForceUnground();
+        }
+    }
+
+    bool CanJump()
+    {
+        if (JumpActive)
+            return false;
+
+        if (IsGroundedForJump() is false)
+            return false;
+
+        return true;
+    }
+
+    bool HasJumpInput()
+    {
+        return JumpInputBufferTimer > 0;
+    }
+
+    bool IsGroundedForJump()
+    {
+        if (IsGrounded)
+            return true;
+
+        if (JumpCoyoteTimeTimer > 0f)
+            return true;
+
+        return false;
     }
     #endregion
 

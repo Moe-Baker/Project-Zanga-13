@@ -165,6 +165,8 @@ MonoBehaviour:
   GravityAcceleration: 20
   MoveSpeed: 5
   MoveAcceleration: 30
+  JumpMaxForce: 6.5
+  JumpDrag: 14
   LookSpeed: 420
   InteractionRadius: 5
   GrabHeightMarker: {fileID: 5134277709175728430}
